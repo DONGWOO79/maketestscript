@@ -57,6 +57,7 @@ interface AppState {
   closeSession: () => void;
   toggleRecording: () => void;
   addStep: (step: TestStep) => void;
+  updateStep: (id: string, updates: Partial<TestStep>) => void;
   removeStep: (id: string) => void;
   inspectElement: (x: number, y: number, autoRecord?: boolean) => void;
   runScript: () => void;
@@ -274,6 +275,14 @@ export const useStore = create<AppState>((set, get) => ({
         data: { step },
       }));
     }
+  },
+
+  updateStep: (id, updates) => {
+    set((state) => ({
+      steps: state.steps.map((step) =>
+        step.id === id ? { ...step, ...updates } : step
+      ),
+    }));
   },
 
   removeStep: (id) => {

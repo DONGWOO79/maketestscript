@@ -4,35 +4,58 @@ import { useStore } from '@/lib/store';
 import { Trash2 } from 'lucide-react';
 
 export function ScriptEditor() {
-  const { steps, removeStep, sessionId } = useStore();
+  const { steps, removeStep, updateStep, sessionId } = useStore();
 
-  const getStepDisplay = (step: any) => {
-    switch (step.type) {
-      case 'navigate':
-        return `Navigate to ${step.url}`;
-      case 'click':
-        return `Click: ${step.target?.candidates[0]?.selector || 'unknown'}`;
-      case 'type':
-        return `Type "${step.value}" into ${step.target?.candidates[0]?.selector || 'unknown'}`;
-      case 'waitFor':
-        return 'Wait';
-      case 'assert':
-        return `Assert: ${step.target?.candidates[0]?.selector || 'unknown'} is visible`;
-      default:
-        return step.type;
+  const handleCommandChange = (stepId: string, newType: string) => {
+    updateStep(stepId, { type: newType as any });
+  };
+
+  const handleTargetChange = (stepId: string, value: string) => {
+    const step = steps.find(s => s.id === stepId);
+    if (!step) return;
+    
+    // Update target selector
+    if (step.target) {
+      updateStep(stepId, {
+        target: {
+          ...step.target,
+          candidates: [
+            { ...step.target.candidates[0], selector: value }
+          ]
+        }
+      });
+    } else {
+      // For navigate command, update URL
+      updateStep(stepId, { url: value });
     }
+  };
+
+  const handleValueChange = (stepId: string, value: string) => {
+    updateStep(stepId, { value });
+  };
+
+  const getTarget = (step: any): string => {
+    if (step.url) return step.url;
+    if (step.target?.candidates?.[0]) {
+      return step.target.candidates[0].selector;
+    }
+    return '';
+  };
+
+  const getValue = (step: any): string => {
+    return step.value || '';
   };
 
   return (
     <div className="h-full flex flex-col bg-card">
-      <div className="h-12 border-b border-border px-4 flex items-center">
-        <h2 className="font-semibold">스크립트</h2>
-        <span className="ml-auto text-sm text-muted-foreground">
-          {steps.length} 스텝
+      <div className="h-12 border-b border-border px-4 flex items-center justify-between">
+        <h2 className="font-semibold">Test Script</h2>
+        <span className="text-sm text-muted-foreground">
+          {steps.length} steps
         </span>
       </div>
 
-      <div className="flex-1 overflow-auto p-2">
+      <div className="flex-1 overflow-auto">
         {!sessionId ? (
           <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
             세션을 시작하세요
@@ -42,84 +65,87 @@ export function ScriptEditor() {
             레코드를 시작하거나 수동으로 스텝을 추가하세요
           </div>
         ) : (
-          <div className="space-y-1">
-            {steps.map((step, index) => (
-              <div
-                key={step.id}
-                className="group flex items-start gap-2 p-3 rounded-lg border border-border bg-background hover:bg-accent/50 transition-colors"
-              >
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium mb-1">
-                    {step.type.toUpperCase()}
-                  </div>
-                  <div className="text-xs text-muted-foreground break-all">
-                    {getStepDisplay(step)}
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeStep(step.id)}
-                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-opacity"
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted border-b border-border">
+              <tr>
+                <th className="w-8 p-2 text-left font-medium">#</th>
+                <th className="w-24 p-2 text-left font-medium">Command</th>
+                <th className="p-2 text-left font-medium">Target</th>
+                <th className="w-32 p-2 text-left font-medium">Value</th>
+                <th className="w-8 p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {steps.map((step, index) => (
+                <tr
+                  key={step.id}
+                  className="group border-b border-border hover:bg-accent/30 transition-colors"
                 >
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                </button>
-              </div>
-            ))}
-          </div>
+                  {/* Index */}
+                  <td className="p-2 text-muted-foreground text-center">
+                    {index + 1}
+                  </td>
+
+                  {/* Command */}
+                  <td className="p-2">
+                    <select
+                      value={step.type}
+                      onChange={(e) => handleCommandChange(step.id, e.target.value)}
+                      className="w-full px-2 py-1 text-sm bg-background border border-input rounded hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="open">open</option>
+                      <option value="click">click</option>
+                      <option value="type">type</option>
+                      <option value="waitFor">waitFor</option>
+                      <option value="assert">assert</option>
+                      <option value="navigate">navigate</option>
+                    </select>
+                  </td>
+
+                  {/* Target */}
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={getTarget(step)}
+                      onChange={(e) => handleTargetChange(step.id, e.target.value)}
+                      placeholder="Selector or URL"
+                      className="w-full px-2 py-1 text-sm bg-background border border-input rounded hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring font-mono"
+                    />
+                  </td>
+
+                  {/* Value */}
+                  <td className="p-2">
+                    <input
+                      type="text"
+                      value={getValue(step)}
+                      onChange={(e) => handleValueChange(step.id, e.target.value)}
+                      placeholder="Value"
+                      className="w-full px-2 py-1 text-sm bg-background border border-input rounded hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </td>
+
+                  {/* Actions */}
+                  <td className="p-2">
+                    <button
+                      onClick={() => removeStep(step.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-opacity"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {/* Command Palette */}
+      {/* Footer */}
       {sessionId && (
-        <div className="border-t border-border p-3">
-          <div className="text-xs font-semibold text-muted-foreground mb-2">
-            💡 레코딩을 켜고 페이지에서 요소를 클릭하세요
-          </div>
-          <div className="text-xs text-muted-foreground mb-2">
-            또는 수동으로 스텝 추가:
-          </div>
-          <div className="flex gap-2">
-            <button
-              className="flex-1 px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded"
-              onClick={() => {
-                const url = prompt('이동할 URL:');
-                if (url) {
-                  const step = { type: 'navigate', url } as any;
-                  removeStep; // To use the function
-                }
-              }}
-              title="Navigate 스텝 추가"
-            >
-              🔗 Navigate
-            </button>
-            <button
-              className="flex-1 px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded"
-              onClick={() => {
-                const selector = prompt('셀렉터:');
-                const value = prompt('입력할 텍스트:');
-                if (selector && value) {
-                  // Manual type step - simplified
-                  console.log('Type step:', selector, value);
-                }
-              }}
-              title="Type 스텝 추가"
-            >
-              ⌨️ Type
-            </button>
-            <button
-              className="flex-1 px-3 py-1.5 text-xs bg-secondary hover:bg-secondary/80 rounded"
-              onClick={() => {
-                const ms = prompt('대기 시간 (ms):', '1000');
-                if (ms) {
-                  console.log('Wait step:', ms);
-                }
-              }}
-              title="Wait 스텝 추가"
-            >
-              ⏱️ Wait
-            </button>
+        <div className="border-t border-border p-3 bg-muted/30">
+          <div className="text-xs text-muted-foreground text-center">
+            💡 <strong>레코딩 모드</strong>: 페이지에서 클릭 → 자동으로 스텝 추가 → Command 선택하여 편집
           </div>
         </div>
       )}
