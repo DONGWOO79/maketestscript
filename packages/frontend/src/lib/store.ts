@@ -177,11 +177,19 @@ export const useStore = create<AppState>((set, get) => ({
           break;
 
         case 'element:inspected':
+          console.log('🔍 Element inspected:', { 
+            hasData: !!data, 
+            hasCandidates: !!data?.candidates,
+            candidatesLength: data?.candidates?.length,
+            recording: get().recording 
+          });
+          
           set({ inspectedElement: data });
           
           // Auto-record click step if recording
           const { recording } = get();
           if (recording && data && data.candidates && data.candidates.length > 0) {
+            console.log('✅ Recording click step automatically');
             // Create click step automatically
             const clickStep: Omit<TestStep, 'id' | 'timestamp'> = {
               type: 'click',
@@ -193,6 +201,12 @@ export const useStore = create<AppState>((set, get) => ({
             setTimeout(() => {
               get().requestScreenshot();
             }, 500);
+          } else {
+            console.log('⚠️ Not recording:', { 
+              recording, 
+              hasData: !!data,
+              hasCandidates: data?.candidates?.length > 0
+            });
           }
           break;
 
