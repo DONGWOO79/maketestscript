@@ -395,6 +395,17 @@ export const useStore = create<AppState>((set, get) => ({
           }));
           break;
 
+        case 'step:updated':
+          console.log('🔄 Step updated from backend:', data.id);
+          set((state) => ({
+            steps: state.steps.map((step) =>
+              step.id === data.id ? { ...step, value: data.value } : step
+            ),
+            isDirty: true,
+          }));
+          console.log(`✅ Step value updated in frontend store`);
+          break;
+
         case 'element:inspected':
           console.log('🔍 Element inspected:', { 
             hasData: !!data, 

@@ -32,6 +32,12 @@ export function setupWebSocketRoutes(fastify: FastifyInstance) {
                   send('step:recorded', step);
                 });
 
+                // Listen to step updates (for continuous typing)
+                session.eventEmitter.on('step-updated', (update) => {
+                  fastify.log.info(`🔄 Sending step update to frontend: ${update.id}`);
+                  send('step:updated', update);
+                });
+
                 fastify.log.info('Taking initial screenshot...');
                 // Send initial screenshot
                 const screenshotBuffer = await session.page.screenshot({ 

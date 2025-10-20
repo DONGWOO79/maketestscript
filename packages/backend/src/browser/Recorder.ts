@@ -197,17 +197,32 @@ export class Recorder {
       const selectorInfo = await this.handleClickAt(event.x, event.y);
       
       if (selectorInfo && selectorInfo.candidates.length > 0) {
-        const step: TestStep = {
-          id: uuidv4(),
-          type: 'type',
-          timestamp: event.timestamp,
-          target: selectorInfo,
-          value: event.value,
-        };
-        this.session.steps.push(step);
-        console.log(`✅ Input step recorded: "${event.value}", emitting to WebSocket...`);
-        this.session.eventEmitter.emit('step-recorded', step);
-        console.log(`📤 step-recorded event emitted for step ${step.id}`);
+        const selector = selectorInfo.candidates[0]?.selector;
+        
+        // Check if last step is a type on the same field
+        const lastStep = this.session.steps[this.session.steps.length - 1];
+        const lastSelector = lastStep?.target?.candidates?.[0]?.selector;
+        
+        if (lastStep && lastStep.type === 'type' && lastSelector === selector) {
+          // Update existing step instead of creating new one
+          lastStep.value = event.value;
+          lastStep.timestamp = event.timestamp;
+          console.log(`🔄 Updated existing type step with value: "${event.value}"`);
+          this.session.eventEmitter.emit('step-updated', { id: lastStep.id, value: event.value });
+        } else {
+          // Create new step
+          const step: TestStep = {
+            id: uuidv4(),
+            type: 'type',
+            timestamp: event.timestamp,
+            target: selectorInfo,
+            value: event.value,
+          };
+          this.session.steps.push(step);
+          console.log(`✅ Input step recorded: "${event.value}", emitting to WebSocket...`);
+          this.session.eventEmitter.emit('step-recorded', step);
+          console.log(`📤 step-recorded event emitted for step ${step.id}`);
+        }
       } else {
         console.log('⚠️ Input ignored - no valid selector found');
       }
