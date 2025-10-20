@@ -6,11 +6,12 @@
 
 ## 🎯 핵심 기능
 
-- ✅ **라이브 브라우저 뷰**: 실시간 스크린샷 스트리밍으로 페이지 상태 확인
-- ✅ **스마트 레코더**: 클릭/입력 자동 기록 및 안정적인 셀렉터 생성
-- ✅ **Inspector 패널**: 요소 상세 정보 및 셀렉터 후보 점수화 (testid > role > text > css)
-- ✅ **스크립트 에디터**: 스텝 관리 및 수동 편집
-- ✅ **재생 엔진**: Playwright 기반 스크립트 실행
+- ✅ **Interactive Browser Mode**: 실제 Chromium 브라우저 창에서 직접 작업하며 자동 레코딩
+- ✅ **Auto-Recording**: 클릭/타이핑/페이지 이동 자동 캡처 (폴링 방식)
+- ✅ **스마트 셀렉터 생성**: testid > role > text > css > xpath 우선순위 기반 안정적인 셀렉터
+- ✅ **Katalon-style Editor**: Command/Target/Value 테이블 UI로 스크립트 편집
+- ✅ **Inspector 패널**: 요소 상세 정보 및 셀렉터 후보 점수화
+- ✅ **Multi-page Testing**: 페이지 전환 후에도 계속 레코딩 가능
 - ✅ **WebSocket 실시간 통신**: 브라우저 이벤트 양방향 전송
 - ✅ **리사이즈 가능한 패널**: 브라우저/에디터/Inspector 영역 크기 조정
 
@@ -291,6 +292,13 @@ npx playwright install chromium
 - 브라우저 콘솔에서 에러 확인
 - 네트워크 탭에서 WebSocket 연결 상태 확인
 - Base64 인코딩 오버헤드로 인한 지연 가능 (대용량 페이지)
+
+## 📚 문서
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - 상세 아키텍처 및 설계 문서
+- [QUICK_START.md](./QUICK_START.md) - 빠른 시작 가이드
+- [INTERACTIVE_MODE.md](./INTERACTIVE_MODE.md) - 🎯 **Interactive Browser Testing 가이드 (필독!)**
+- [PORT_CONFIGURATION.md](./PORT_CONFIGURATION.md) - 포트 설정 가이드
 
 ## 📄 라이선스
 
