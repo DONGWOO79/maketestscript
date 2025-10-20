@@ -163,9 +163,11 @@ export const useStore = create<AppState>((set, get) => ({
           break;
 
         case 'step:recorded':
+          console.log('📥 Step recorded from backend:', data.type, data.id);
           set((state) => ({
             steps: [...state.steps, data],
           }));
+          console.log(`✅ Step added to frontend store. Total steps: ${get().steps.length}`);
           // Auto-refresh screenshot
           get().requestScreenshot();
           break;

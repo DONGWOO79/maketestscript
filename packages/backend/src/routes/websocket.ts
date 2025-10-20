@@ -28,6 +28,7 @@ export function setupWebSocketRoutes(fastify: FastifyInstance) {
 
                 // Listen to step recordings
                 session.eventEmitter.on('step-recorded', (step) => {
+                  fastify.log.info(`📤 Sending step to frontend: ${step.type} (${step.id})`);
                   send('step:recorded', step);
                 });
 

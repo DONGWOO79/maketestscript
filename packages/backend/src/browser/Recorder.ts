@@ -31,14 +31,14 @@ export class Recorder {
       }
     });
 
-    // Inject recorder script to capture clicks/inputs IN THE REAL BROWSER
-    await page.addInitScript(() => {
+    // Define recorder script
+    const recorderScript = () => {
       console.log('🎯 Recorder script injected - Ready to capture events');
       (window as any).__recorder_events = [];
       (window as any).__recorder_active = true;
       
       // Capture clicks
-      document.addEventListener('click', async (e) => {
+      document.addEventListener('click', (e) => {
         if (!(window as any).__recorder_active) return;
         
         const target = e.target as HTMLElement;
@@ -98,7 +98,14 @@ export class Recorder {
           }, 500); // Wait 500ms after user stops typing
         }
       }, true);
-    });
+    };
+
+    // Inject into current page immediately
+    await page.evaluate(recorderScript);
+    console.log('✅ Recorder script injected into current page');
+
+    // Also inject for future pages
+    await page.addInitScript(recorderScript);
 
     console.log('✅ Auto-recording enabled - All clicks and inputs will be tracked');
 
@@ -111,6 +118,8 @@ export class Recorder {
       clearInterval(this.pollingInterval);
     }
 
+    console.log('🔄 Starting event polling (every 1 second)...');
+
     this.pollingInterval = setInterval(async () => {
       if (!this.session.recording) return;
 
@@ -122,24 +131,28 @@ export class Recorder {
           return events;
         });
 
+        if (events.length > 0) {
+          console.log(`📥 Polled ${events.length} events from browser`);
+        }
+
         // Process each event
         for (const event of events) {
           await this.processRecordedEvent(event);
         }
       } catch (error) {
-        console.error('Error polling events:', error);
+        console.error('❌ Error polling events:', error);
       }
     }, 1000); // Poll every 1 second
   }
 
   private async processRecordedEvent(event: any): Promise<void> {
-    console.log('📝 Processing event:', event.type, event);
+    console.log('📝 Processing event:', event.type, event.targetInfo);
 
     if (event.type === 'click') {
       // Get selector info for the clicked element
       const selectorInfo = await this.handleClickAt(event.x, event.y);
       
-      if (selectorInfo) {
+      if (selectorInfo && selectorInfo.candidates.length > 0) {
         const step: TestStep = {
           id: uuidv4(),
           type: 'click',
@@ -147,14 +160,17 @@ export class Recorder {
           target: selectorInfo,
         };
         this.session.steps.push(step);
+        console.log(`✅ Click step recorded, emitting to WebSocket...`);
         this.session.eventEmitter.emit('step-recorded', step);
-        console.log('✅ Click step recorded');
+        console.log(`📤 step-recorded event emitted for step ${step.id}`);
+      } else {
+        console.log('⚠️ Click ignored - no valid selector found');
       }
     } else if (event.type === 'input') {
       // Get selector info for the input element
       const selectorInfo = await this.handleClickAt(event.x, event.y);
       
-      if (selectorInfo) {
+      if (selectorInfo && selectorInfo.candidates.length > 0) {
         const step: TestStep = {
           id: uuidv4(),
           type: 'type',
@@ -163,8 +179,11 @@ export class Recorder {
           value: event.value,
         };
         this.session.steps.push(step);
+        console.log(`✅ Input step recorded: "${event.value}", emitting to WebSocket...`);
         this.session.eventEmitter.emit('step-recorded', step);
-        console.log('✅ Input step recorded:', event.value);
+        console.log(`📤 step-recorded event emitted for step ${step.id}`);
+      } else {
+        console.log('⚠️ Input ignored - no valid selector found');
       }
     }
   }
