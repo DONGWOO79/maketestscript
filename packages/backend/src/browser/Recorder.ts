@@ -28,6 +28,19 @@ export class Recorder {
         this.session.steps.push(step);
         this.session.eventEmitter.emit('step-recorded', step);
         console.log('📍 Navigation recorded:', frame.url());
+        
+        // Re-inject recorder script after navigation (addInitScript should handle this)
+        // But let's ensure it's active
+        try {
+          await page.evaluate(() => {
+            if (!(window as any).__recorder_active) {
+              console.log('🔄 Re-activating recorder after navigation');
+              (window as any).__recorder_active = true;
+            }
+          });
+        } catch (error) {
+          console.log('⚠️ Could not verify recorder status after navigation');
+        }
       }
     });
 
@@ -123,6 +136,13 @@ export class Recorder {
     this.pollingInterval = setInterval(async () => {
       if (!this.session.recording) return;
 
+      // Check if page is still open
+      if (this.session.page.isClosed()) {
+        console.log('⚠️ Page is closed, stopping event polling');
+        this.stopRecording();
+        return;
+      }
+
       try {
         // Get events from browser
         const events = await this.session.page.evaluate(() => {
@@ -139,8 +159,14 @@ export class Recorder {
         for (const event of events) {
           await this.processRecordedEvent(event);
         }
-      } catch (error) {
-        console.error('❌ Error polling events:', error);
+      } catch (error: any) {
+        // Ignore errors from navigation or closed pages
+        if (error.message?.includes('Execution context was destroyed') ||
+            error.message?.includes('Target page, context or browser has been closed')) {
+          console.log('⚠️ Page context changed or closed during polling');
+        } else {
+          console.error('❌ Error polling events:', error);
+        }
       }
     }, 1000); // Poll every 1 second
   }

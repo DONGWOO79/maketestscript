@@ -106,9 +106,18 @@ export function setupWebSocketRoutes(fastify: FastifyInstance) {
             {
               const session = fastify.sessionManager.getSession(currentSessionId!);
               if (session) {
-                const screenshotBuffer = await session.page.screenshot({ type: 'png' });
-                const screenshot = screenshotBuffer.toString('base64');
-                send('page:screenshot', { screenshot });
+                try {
+                  if (session.page.isClosed()) {
+                    fastify.log.warn('Cannot take screenshot: page is closed');
+                    break;
+                  }
+                  const screenshotBuffer = await session.page.screenshot({ type: 'png' });
+                  const screenshot = screenshotBuffer.toString('base64');
+                  send('page:screenshot', { screenshot });
+                } catch (error) {
+                  fastify.log.error('Failed to take screenshot:', error);
+                  // Don't send error to frontend for screenshot failures
+                }
               }
             }
             break;
@@ -135,22 +144,56 @@ export function setupWebSocketRoutes(fastify: FastifyInstance) {
           case 'script:run':
             {
               const session = fastify.sessionManager.getSession(currentSessionId!);
-              if (session) {
-                // Import runner dynamically
-                const { Runner } = await import('../runner/Runner');
-                const runner = new Runner(session);
-                
-                send('script:started', {});
-                
-                try {
-                  await runner.run(data.steps);
-                  send('script:completed', { success: true });
-                } catch (error: any) {
-                  send('script:error', { 
-                    message: error.message,
-                    step: error.step,
+              if (!session) {
+                send('error', { 
+                  message: '세션이 종료되었습니다. 새로운 세션을 시작해주세요.',
+                });
+                break;
+              }
+
+              // Check if browser/page is still open
+              try {
+                const isClosed = session.page.isClosed();
+                if (isClosed) {
+                  fastify.log.error('Browser page is closed');
+                  send('error', { 
+                    message: '브라우저가 닫혔습니다. 새로운 세션을 시작해주세요.',
                   });
+                  break;
                 }
+              } catch (error) {
+                fastify.log.error('Failed to check page status:', error);
+                send('error', { 
+                  message: '브라우저 상태를 확인할 수 없습니다. 새로운 세션을 시작해주세요.',
+                });
+                break;
+              }
+
+              // Import runner dynamically
+              const { Runner } = await import('../runner/Runner');
+              const runner = new Runner(session);
+              
+              // Listen to step execution events
+              session.eventEmitter.on('step-executed', (result) => {
+                send('step:executed', result);
+              });
+              
+              send('script:started', {});
+              
+              try {
+                fastify.log.info(`Starting script execution with ${data.steps.length} steps`);
+                await runner.run(data.steps);
+                fastify.log.info('✅ Script execution completed successfully');
+                send('script:completed', { success: true });
+              } catch (error: any) {
+                fastify.log.error('❌ Script execution failed:', error.message);
+                send('script:error', { 
+                  message: error.message,
+                  step: error.step,
+                });
+              } finally {
+                // Clean up event listener
+                session.eventEmitter.removeAllListeners('step-executed');
               }
             }
             break;
