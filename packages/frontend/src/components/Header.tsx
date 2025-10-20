@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { Play, Circle, Square, Save } from 'lucide-react';
+import { Play, Circle, Square, Save, Download, Upload, FileText } from 'lucide-react';
 
 export function Header() {
   const {
@@ -11,11 +11,17 @@ export function Header() {
     baseUrl,
     recording,
     running,
+    isDirty,
+    scriptName,
+    steps,
     setBaseUrl,
     startSession,
     closeSession,
     toggleRecording,
     runScript,
+    saveScript,
+    downloadScript,
+    loadScript,
   } = useStore();
 
   const [urlInput, setUrlInput] = useState('https://example.com');
@@ -34,12 +40,56 @@ export function Header() {
   };
 
   const handleCloseSession = () => {
+    if (isDirty && !confirm('저장하지 않은 변경사항이 있습니다. 정말 종료하시겠습니까?')) {
+      return;
+    }
     closeSession();
   };
 
+  const handleUpload = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e: any) => {
+      const file = e.target?.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = JSON.parse(event.target?.result as string);
+            loadScript(data);
+          } catch (error) {
+            alert('파일을 불러오는데 실패했습니다.');
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
+  // Warn before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty && steps.length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty, steps.length]);
+
   return (
     <header className="h-14 border-b border-border bg-card px-4 flex items-center gap-4">
-      <div className="font-semibold text-lg">WebTest Automation</div>
+      <div className="font-semibold text-lg flex items-center gap-2">
+        <FileText className="w-5 h-5" />
+        <span>
+          {scriptName}
+          {isDirty && <span className="text-destructive">*</span>}
+        </span>
+      </div>
 
       <div className="flex-1 flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Base URL:</span>
@@ -96,19 +146,42 @@ export function Header() {
 
           <button
             onClick={runScript}
-            disabled={running || recording}
+            disabled={running || recording || steps.length === 0}
             className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Play className="w-4 h-4" />
             실행
           </button>
 
+          <div className="h-6 w-px bg-border" />
+
           <button
-            disabled
-            className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => saveScript()}
+            disabled={!isDirty || steps.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="로컬 스토리지에 저장"
           >
             <Save className="w-4 h-4" />
             저장
+          </button>
+
+          <button
+            onClick={downloadScript}
+            disabled={steps.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="JSON 파일로 다운로드"
+          >
+            <Download className="w-4 h-4" />
+            다운로드
+          </button>
+
+          <button
+            onClick={handleUpload}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80"
+            title="JSON 파일 불러오기"
+          >
+            <Upload className="w-4 h-4" />
+            불러오기
           </button>
         </>
       )}
