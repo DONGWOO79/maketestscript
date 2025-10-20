@@ -46,9 +46,14 @@ export class BrowserSessionManager {
   async createSession(baseUrl?: string): Promise<string> {
     const sessionId = uuidv4();
     
+    // Launch in HEADFUL mode - real browser window for interactive testing
     const browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: false,  // ✨ Real browser window!
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--start-maximized',  // Start maximized for better visibility
+      ],
     });
 
     const context = await browser.newContext({

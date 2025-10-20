@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export class Recorder {
   private session: BrowserSession;
+  private pollingInterval: NodeJS.Timeout | null = null;
 
   constructor(session: BrowserSession) {
     this.session = session;
@@ -12,6 +13,8 @@ export class Recorder {
   async startRecording(): Promise<void> {
     this.session.recording = true;
     const { page, cdpSession } = this.session;
+
+    console.log('🎬 Recording started - Browser actions will be captured automatically');
 
     // Listen to navigation
     page.on('framenavigated', async (frame) => {
@@ -24,41 +27,165 @@ export class Recorder {
         };
         this.session.steps.push(step);
         this.session.eventEmitter.emit('step-recorded', step);
+        console.log('📍 Navigation recorded:', frame.url());
       }
     });
 
-    // Inject recorder script to capture clicks/inputs
+    // Inject recorder script to capture clicks/inputs IN THE REAL BROWSER
     await page.addInitScript(() => {
+      console.log('🎯 Recorder script injected - Ready to capture events');
       (window as any).__recorder_events = [];
+      (window as any).__recorder_active = true;
       
-      document.addEventListener('click', (e) => {
+      // Capture clicks
+      document.addEventListener('click', async (e) => {
+        if (!(window as any).__recorder_active) return;
+        
         const target = e.target as HTMLElement;
+        const rect = target.getBoundingClientRect();
+        
+        console.log('🖱️ Click captured:', {
+          tagName: target.tagName,
+          id: target.id,
+          class: target.className,
+          x: e.clientX,
+          y: e.clientY,
+        });
+        
         (window as any).__recorder_events.push({
           type: 'click',
           timestamp: Date.now(),
           x: e.clientX,
           y: e.clientY,
           tagName: target.tagName,
+          targetInfo: {
+            id: target.id,
+            className: target.className,
+            textContent: target.textContent?.trim().slice(0, 50),
+          }
         });
       }, true);
 
+      // Capture inputs
+      let inputTimeout: any = null;
       document.addEventListener('input', (e) => {
+        if (!(window as any).__recorder_active) return;
+        
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-          (window as any).__recorder_events.push({
-            type: 'input',
-            timestamp: Date.now(),
-            value: (target as HTMLInputElement).value,
-            x: target.getBoundingClientRect().left,
-            y: target.getBoundingClientRect().top,
-          });
+          // Debounce input events
+          clearTimeout(inputTimeout);
+          inputTimeout = setTimeout(() => {
+            const rect = target.getBoundingClientRect();
+            console.log('⌨️ Input captured:', {
+              tagName: target.tagName,
+              id: target.id,
+              value: (target as HTMLInputElement).value,
+            });
+            
+            (window as any).__recorder_events.push({
+              type: 'input',
+              timestamp: Date.now(),
+              value: (target as HTMLInputElement).value,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+              targetInfo: {
+                id: target.id,
+                className: target.className,
+                tagName: target.tagName,
+              }
+            });
+          }, 500); // Wait 500ms after user stops typing
         }
       }, true);
     });
+
+    console.log('✅ Auto-recording enabled - All clicks and inputs will be tracked');
+
+    // Poll for recorded events from the browser
+    this.startEventPolling();
+  }
+
+  private async startEventPolling(): Promise<void> {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+
+    this.pollingInterval = setInterval(async () => {
+      if (!this.session.recording) return;
+
+      try {
+        // Get events from browser
+        const events = await this.session.page.evaluate(() => {
+          const events = (window as any).__recorder_events || [];
+          (window as any).__recorder_events = []; // Clear processed events
+          return events;
+        });
+
+        // Process each event
+        for (const event of events) {
+          await this.processRecordedEvent(event);
+        }
+      } catch (error) {
+        console.error('Error polling events:', error);
+      }
+    }, 1000); // Poll every 1 second
+  }
+
+  private async processRecordedEvent(event: any): Promise<void> {
+    console.log('📝 Processing event:', event.type, event);
+
+    if (event.type === 'click') {
+      // Get selector info for the clicked element
+      const selectorInfo = await this.handleClickAt(event.x, event.y);
+      
+      if (selectorInfo) {
+        const step: TestStep = {
+          id: uuidv4(),
+          type: 'click',
+          timestamp: event.timestamp,
+          target: selectorInfo,
+        };
+        this.session.steps.push(step);
+        this.session.eventEmitter.emit('step-recorded', step);
+        console.log('✅ Click step recorded');
+      }
+    } else if (event.type === 'input') {
+      // Get selector info for the input element
+      const selectorInfo = await this.handleClickAt(event.x, event.y);
+      
+      if (selectorInfo) {
+        const step: TestStep = {
+          id: uuidv4(),
+          type: 'type',
+          timestamp: event.timestamp,
+          target: selectorInfo,
+          value: event.value,
+        };
+        this.session.steps.push(step);
+        this.session.eventEmitter.emit('step-recorded', step);
+        console.log('✅ Input step recorded:', event.value);
+      }
+    }
   }
 
   stopRecording(): void {
     this.session.recording = false;
+    
+    // Stop polling
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+
+    // Disable recorder in browser
+    this.session.page.evaluate(() => {
+      (window as any).__recorder_active = false;
+    }).catch(() => {
+      // Page might be closed
+    });
+
+    console.log('⏹️ Recording stopped');
   }
 
   async handleClickAt(x: number, y: number): Promise<SelectorInfo | null> {
