@@ -34,8 +34,9 @@ export class Runner {
             break;
 
           case 'waitFor':
-            // Simple wait for now
-            await page.waitForTimeout(1000);
+            // Wait for specified duration in milliseconds
+            const waitDuration = parseInt(step.value || '1000', 10);
+            await page.waitForTimeout(waitDuration);
             break;
 
           case 'assert':
@@ -43,6 +44,11 @@ export class Runner {
               const selector = this.getBestSelector(step.target);
               await page.locator(selector).waitFor({ state: 'visible', timeout: 5000 });
             }
+            break;
+
+          case 'comment':
+            // Comments are just metadata, no action needed
+            console.log(`💬 Comment: ${step.value || step.url || 'No text'}`);
             break;
 
           default:

@@ -62,6 +62,7 @@ interface AppState {
   closeSession: () => void;
   toggleRecording: () => void;
   addStep: (step: TestStep) => void;
+  insertStep: (step: TestStep, afterIndex: number) => void;
   updateStep: (id: string, updates: Partial<TestStep>) => void;
   removeStep: (id: string) => void;
   inspectElement: (x: number, y: number, autoRecord?: boolean) => void;
@@ -89,8 +90,15 @@ function generateHTMLReport(name: string, baseUrl: string, steps: any[], timesta
   const date = new Date(timestamp).toLocaleString();
   
   const stepsHtml = steps.map((step, index) => {
-    const target = step.target?.candidates?.[0]?.selector || step.url || '-';
-    const value = step.value || '-';
+    let target = step.target?.candidates?.[0]?.selector || step.url || '-';
+    let value = step.value || '-';
+    
+    // Special handling for comment type
+    if (step.type === 'comment') {
+      target = step.value || 'No comment text';
+      value = '-';
+    }
+    
     return `
       <tr>
         <td>${index + 1}</td>
@@ -246,11 +254,13 @@ function generatePlaywrightCode(name: string, baseUrl: string, steps: any[]): st
         const typeSelector = step.target?.candidates?.[0]?.selector || 'input';
         return `${indent}await page.locator('${typeSelector}').fill('${step.value || ''}');`;
       case 'waitFor':
-        const waitSelector = step.target?.candidates?.[0]?.selector || 'body';
-        return `${indent}await page.locator('${waitSelector}').waitFor({ state: 'visible' });`;
+        const waitDuration = parseInt(step.value || '1000', 10);
+        return `${indent}await page.waitForTimeout(${waitDuration}); // Wait ${waitDuration}ms`;
       case 'assert':
         const assertSelector = step.target?.candidates?.[0]?.selector || 'body';
         return `${indent}await expect(page.locator('${assertSelector}')).toBeVisible();`;
+      case 'comment':
+        return `${indent}// ${step.value || 'No comment text'}`;
       default:
         return `${indent}// Unknown step type: ${step.type}`;
     }
@@ -519,6 +529,19 @@ export const useStore = create<AppState>((set, get) => ({
         data: { step },
       }));
     }
+  },
+
+  insertStep: (step, afterIndex) => {
+    set((state) => {
+      const newSteps = [...state.steps];
+      newSteps.splice(afterIndex + 1, 0, step);
+      return {
+        steps: newSteps,
+        isDirty: true,
+      };
+    });
+    // Auto-save after inserting
+    setTimeout(() => get().autoSave(), 2000);
   },
 
   updateStep: (id, updates) => {
