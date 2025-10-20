@@ -65,27 +65,24 @@ export class Recorder {
     const { page, cdpSession } = this.session;
 
     try {
+      console.log(`Getting element at location: (x: ${x}, y: ${y})`);
+      
       // Use CDP to get node at location
       const { backendNodeId } = await cdpSession.send('DOM.getNodeForLocation', {
         x: Math.round(x),
         y: Math.round(y),
       });
 
-      if (!backendNodeId) return null;
+      if (!backendNodeId) {
+        console.log('No backendNodeId found');
+        return null;
+      }
 
-      // Get node details
-      const { node } = await cdpSession.send('DOM.describeNode', {
-        backendNodeId,
-      });
+      console.log(`Found backendNodeId: ${backendNodeId}`);
 
-      // Get element handle from page
-      const elementHandle = await page.evaluateHandle((nodeId) => {
-        // Find element by walking DOM (simplified)
-        return document.body; // Placeholder - need proper node resolution
-      }, node.nodeId);
-
-      // Extract element info
-      const elementInfo = await page.evaluate((el) => {
+      // Get element info directly using CDP and page evaluation at the exact location
+      const elementInfo = await page.evaluate(({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
         if (!(el instanceof HTMLElement)) return null;
         
         const rect = el.getBoundingClientRect();
@@ -106,12 +103,19 @@ export class Recorder {
           },
           textContent: el.textContent?.trim() || '',
         };
-      }, elementHandle);
+      }, { x, y });
 
-      if (!elementInfo) return null;
+      if (!elementInfo) {
+        console.log('No element info found');
+        return null;
+      }
+
+      console.log(`Element found: ${elementInfo.tagName}`, elementInfo.attributes);
 
       // Generate selector candidates
       const candidates = await this.generateSelectors(page, elementInfo, cdpSession, backendNodeId);
+
+      console.log(`Generated ${candidates.length} selector candidates`);
 
       const selectorInfo: SelectorInfo = {
         element: elementInfo,
